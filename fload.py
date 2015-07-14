@@ -56,7 +56,8 @@ def fload(f, fmt, ndim=None):
 
 if __name__=='__main__':
     if len(sys.argv) < 2:
-        sys.stdout.write(fload.__doc__+"\n")
+        stdout("Usage: %s [flag] [files]..\n\n")
+        stdout(fload.__doc__+"\n")
 
     fmt_flag = sys.argv[1]
     for fname in sys.argv[2:]:
