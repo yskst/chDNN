@@ -19,15 +19,8 @@ def __parse_flags__(flags):
     
     return r + fmt[0:2]
 
-
-def fload(f, fmt, ndim=None):
-    """ Load data from file.
-    parameter f:    File like object or filename.
-    parameter fmt:  File format flags. The follwing are the details.
-    parameter ncol: The number of column to reshape. If False or None, Nothing to do.
-
-    fmt
-    ---
+def get_flags_doc():
+    s ="""    
     The format flags is three type. If the file is ascii text format, the flag is 'text'. If the file is numpy binary format, the flag is 'npy'.
     If the file is binary format, the flag is combination of encoding and endian(e.g. f4le means little nedian 4byte float).
 
@@ -40,9 +33,16 @@ def fload(f, fmt, ndim=None):
         le: little endian
         be: big endian
         ne: native endian
-    """
+"""
+    return s
 
-    if fmt == "npy":
+
+def fload(f, fmt, ndim=None):
+    """ Load data from file.
+    parameter f:    File like object or filename.
+    parameter fmt:  File format flags. Details can get `get_flags_doc()` function.
+    parameter ncol: The number of column to reshape. If False or None, Nothing to do."""
+   if fmt == "npy":
         return np.load(f)
     elif fmt == "text":
         return np.loadtxt(f)
