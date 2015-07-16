@@ -3,43 +3,27 @@
 # Training RBM.
 
 import sys, fileinput
+from docopt import docopt
+
 import util,fload
 
-def print_help():
-    stdout("""
-Training RBM.
-Usage: %s [options] [files]...
-required options
----------------
-    --of     [FILE]:  output file name.(npz file)
-    --df     [str]:   sample format flags.The flag's detail is follow.
-    --mb     [NUM]:   mini-batch size.
-    -e, --ep [NUM]:   the number of ephoch.
-    --lr, --mm --re [NUM]: learning rate, momentum, regulalizer.
-                            [default=0]
-    --rt     [bb|rb]: bb=bernoulli-bernoulli, gb=gaussian-bernoulli.
+"""Training RBM.
+Usage: 
+  trainrbm.py [options] <visnum> <hidnum> <file>
 
-optional option
----------------
-    --seed [NUM]:     The seed of random value.[default=1234]
-    -h, --help:       Show this help.
-
-data format
------------
+options:
+   -h, --help   Show this help.
+   --of=<file>  output file name.(npz file)
+   --df=<str>   sample format flags.The flag's detail is follow.
+   --mb=<num>   mini-batch size.
+   -e <num> --epoch=<num>   the number of ephoch.
+   --lr <val>   learning rate [default: 0] 
+   --mm <val>   momentum [default: 0] 
+   --re <val>   regulalizer. [default: 0]
+   --rt <bb|rb> bb=bernoulli-bernoulli, gb=gaussian-bernoulli.
+   --seed <NUM> The seed of random value.[default=1234]
 """)
-    stdout(fload.get_flags_doc())
 
 if __name__=='__main__':
-    lr = 0
-    mm = 0
-    re = 0
-    mbsize = None
-    epoch = None
-    ofile = None
-    dtype = None
-    rbmtype = None
 
 
-
-    # option analysis
-    args=[]
