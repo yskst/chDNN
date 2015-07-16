@@ -16,7 +16,7 @@ def __parse_flags__(flags):
     elif e == "ne": r = "="
     else:
         raise NameError("The encoding %s is unknown." % fmt)
-    
+
     return r + fmt[0:2]
 
 def get_flags_doc():
@@ -37,12 +37,13 @@ def get_flags_doc():
     return s
 
 
-def fload(f, fmt, ndim=None):
+def dataio(f, fmt, ndim=None):
     """ Load data from file.
     parameter f:    File like object or filename.
     parameter fmt:  File format flags. Details can get `get_flags_doc()` function.
-    parameter ncol: The number of column to reshape. If False or None, Nothing to do."""
-   if fmt == "npy":
+    parameter ncol: The number of column to reshape. If False or None, Nothing to do.
+    """
+    if fmt == "npy":
         return np.load(f)
     elif fmt == "text":
         return np.loadtxt(f)
@@ -52,15 +53,15 @@ def fload(f, fmt, ndim=None):
         if ndim:
             np.reshape(m, (-1, ndim))
         return m
-
+        
 
 if __name__=='__main__':
     if len(sys.argv) < 2:
         stdout("Usage: %s [flag] [files]..\n\n")
-        stdout(fload.__doc__+"\n")
-
+        stdout(dataio.__doc__+"\n")
+        
     fmt_flag = sys.argv[1]
     for fname in sys.argv[2:]:
-        d = fload(fname, fmt_flag)
+        d = dataio(fname, fmt_flag)
         np.savetxt(sys.stdout, d, fmt='%+.6e')
 
