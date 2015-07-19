@@ -34,6 +34,7 @@ class train_cpu:
         self.__f__ = f
         self.__model__ = F1.Linear(visnum, hidnum)
         self.__vbias__ = np.zeros(visnum, dtype=np.float32)
+        self.__gvbias__= np.empty_like(self.__vbias__)
         if bb:
             self.__inverse__ = self.__inverse_bb
         else:
@@ -44,16 +45,30 @@ class train_cpu:
     def __inverse_gb(x):
         return x * self.__model__.W.T + self.__vbias__
 
-    def sampling(self, p):
+    def __sampling(self, p):
     """ Samping hidden layer's neuron state from probability. """
         return np.random.binomial(1, p=p, size=self.__model__.shape)
 
-    def trainging(self, x):
+    def trainging(self, x, lr, mm, re):
         h0act = self.__f__(self.__model__.forward_cpu(x))
         h0smp = self.sampling(h1act)
         v1act = self.__inverse__(h1smp)
         h1act = self.__f__(self.__model__.forward_cpu(x))
+        
+        # Calcurate gradient of each parameter.
+        gw = v1act.T*h1act - v0act.T*h0act
+        gb = np.sum(h1act,axis=0) - np.sum(h0act,axis=0)
+        gvb= np.sum(v1act,axis=0) - np.sum(v0act,axis=0)
 
+        # Calcurate difference for update.
+        self.__model__.gw= -lr*gw  +mm*self.__model__.gw -re*self.__model__.W
+        self.__model__.gb= -lr*gb  +mm*self.__model__.gb
+        self.__gvbias__  = -lr*gvb +mm*self.__gvbias__
+        
+        # Update each parameter.
+        self.__model__.W += self.__model__.gw
+        self.__model__.b += self.__model__.gb
+        self.__vbias__   += self.__gvbias__
 
 
 if __name__=='__main__':
