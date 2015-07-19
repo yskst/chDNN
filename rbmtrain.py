@@ -6,7 +6,7 @@ Usage:
   trainrbm.py -h | --help
 options:
    -h, --help   Show this help.
-   --cpu        Processing without GPU.
+   --gpu=<NUM>  The id of GPU.If 0, processing on CPU.[ default: 1]
    --of=<file>  output file name.(npz file)
    --df=<str>   sample data format flags.The flag's detail is follow.
    --mb=<num>   mini-batch size.
@@ -15,27 +15,46 @@ options:
    --mm <val>   momentum [default: 0] 
    --re <val>   regulalizer. [default: 0]
    --rt <bb|rb> bb=bernoulli-bernoulli, gb=gaussian-bernoulli.
-   --seed <NUM> The seed of random value.[default=1234]
+   --seed <NUM> The seed of random value.[default: 1234]
 """ 
 
 import sys
 from docopt import docopt
 
 import numpy as np
-from chainer import cuda, Variable, FunctionSet,optimizers
+from chainer import cuda, Variable, FunctionSet
 import chainer.functions as F
 
 import util,dataio
 
 
-def forward_gb(x, model, f):
-    """ forwarding of Gaussian-Bernoulli RBM 
-        param x:     input data.
-        param model: functionset.
-        param f:     activate function."""
+class train_cpu:
+    def init(self, visnum, hidnum, seed, f=F.sigmoid, bb=true):
+        np.random.seed(seed)
+        self.__f__ = f
+        self.__model__ = F1.Linear(visnum, hidnum)
+        self.__vbias__ = np.zeros(visnum, dtype=np.float32)
+        if bb:
+            self.__inverse__ = self.__inverse_bb
+        else:
+            self.__inverse__ = self.__inverse_gb
+    
+    def __inverse_bb(x):
+        return self.__f__(x * self.__model__.W.T + self.__vbias__)
+    def __inverse_gb(x):
+        return x * self.__model__.W.T + self.__vbias__
 
-    x = Variable(x)
-    h1 = f(model.v0(x))
+    def sampling(self, p):
+    """ Samping hidden layer's neuron state from probability. """
+        return np.random.binomial(1, p=p, size=self.__model__.shape)
+
+    def trainging(self, x):
+        h0act = self.__f__(self.__model__.forward_cpu(x))
+        h0smp = self.sampling(h1act)
+        v1act = self.__inverse__(h1smp)
+        h1act = self.__f__(self.__model__.forward_cpu(x))
+
+
 
 if __name__=='__main__':
     args = docopt(__doc__+dataio.get_flags_doc(), argv=sys.argv[1:])
