@@ -46,7 +46,8 @@ class train_cpu:
         return x * self.__model__.W.T + self.__vbias__
 
     def __sampling(self, ndim, p):
-    """ Samping hidden layer's neuron state from probability. """
+        """ Samping hidden layer's neuron state from probability. 
+        """
         return np.random.binomial(1, p=p, size=ndim)
 
     def trainging(self, x, lr, mm, re):
