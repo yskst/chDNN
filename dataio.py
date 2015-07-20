@@ -7,7 +7,7 @@ import numpy as np
 import util
 
 
-def __parse_flags__(flags):
+def __parse_flags__(fmt):
     """ parse file format flags """
     r = ""
     e = fmt[2:]
@@ -51,7 +51,7 @@ def dataio(f, fmt, ndim=None):
         dtype = __parse_flags__(fmt)
         m = np.fromfile(f, dtype)
         if ndim:
-            np.reshape(m, (-1, ndim))
+            return np.reshape(m, (-1, ndim))
         return m
         
 
