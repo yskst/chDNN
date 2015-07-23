@@ -35,7 +35,7 @@ class train_cpu:
         self.__model__ = F.Linear(visnum, hidnum)
         self.__vbias__ = np.zeros(visnum, dtype=np.float32)
         self.__model_inv__ = F.Linear(hidnum, visnum, 
-                 initialW=self.__model__.W.T.copy()).to_gpu(gpu)
+                 initialW=self.__model__.W.T.copy())
 
         self.__model__.zero_grads()
         self.__model_inv__.zero_grads()
@@ -46,38 +46,40 @@ class train_cpu:
             self.__inverse__ = self.__inverse_gb
 
     def __inverse_bb(self, x):
-        return self.__f__(self.__model_inv__)
+        return self.__f__(self.__model_inv__(x))
     def __inverse_gb(self, x):
         return self.__model_inv__(x)
 
     def __sampling(self, p):
         """ Samping hidden layer's neuron state from probability. """
-        return np.random.binomial(1, p=p, size=p.shape)
+        return np.random.binomial(1, p=p, size=p.shape).astype(np.float32)
 
-    def train(self, x, lr, mm, re):
+    def train(self, x, lr=0.0, mm=0.0, re=0.0):
+        ndata = x.shape[0]
         x_cpu = Variable(x)
 
         h0act = self.__f__(self.__model__(x_cpu))
         h0smp = self.__sampling(h0act.data)
         v1act = self.__inverse__(Variable(h0smp))
-        h1act = self.__f__(self.__model__(x))
+        h1act = self.__f__(self.__model__(v1act))
         
         # Calcurate gradient of each parameter.
-        gw = v1act.T*h1act - v0act.T*h0act
-        gb = np.sum(h1act,axis=0) - np.sum(h0act,axis=0)
-        gvb= np.sum(v1act,axis=0) - np.sum(v0act,axis=0)
+        gw = F.matmul(v1act,h1act,transa=True).data - F.matmul(x_cpu, h0act, transa=True).data / ndata
+        gb = (np.sum(h1act.data, axis=0) - np.sum(h0act.data,axis=0)) / ndata
+        gvb= (np.sum(v1act.data, axis=0) - np.sum(x_cpu.data,axis=0)) / ndata
 
         # Calcurate difference for update.
-        self.__model__.gw= -lr*gw  +mm*self.__model__.gw -re*self.__model__.W
-        self.__model__.gb= -lr*gb  +mm*self.__model__.gb
-        self.__gvbias__  = -lr*gvb +mm*self.__gvbias__
+        self.__model__.gW     = -lr*gw.T  +mm*self.__model__.gW -re*self.__model__.W
+        self.__model__.gb     = -lr*gb  +mm*self.__model__.gb
+        self.__model_inv__.gb = -lr*gvb +mm*self.__model_inv__.gb
         
         # Update each parameter.
-        self.__model__.W += self.__model__.gw
+        self.__model__.W += self.__model__.gW
         self.__model__.b += self.__model__.gb
-        self.__vbias__   += self.__gvbias__
+        self.__model_inv__.W    = self.__model__.W.T.copy()
+        self.__model_inv__.b   += self.__model_inv__.gb
 
-        return np.sum((v0act-v1act)**2)
+        return np.mean((x-v1act.data)**2)
 
     def get_param(self):
         model = self.__model__
@@ -123,7 +125,7 @@ class train_gpu(train_cpu):
         return cuda.cumisc.sum(x_variable.data, axis)
 
     def train(self, x, lr=0.0, mm=0.0, re=0.0):
-
+        ndata = x.shape[0]
         x_gpu = Variable(cuda.to_gpu(x,self.gpu))
         h0act = self.__f__(self.__model__(x_gpu))
         h0smp = self.__sampling(self.__model__.b.shape, h0act.data)
@@ -150,7 +152,7 @@ class train_gpu(train_cpu):
         self.__model_inv__.W    = self.__model__.W.T.copy()
         self.__model_inv__.b   += self.__model_inv__.gb
 
-        mse = cuda.gpuarray.sum((x_gpu.data - v1act.data)**2) / ndata
+        mse = cuda.gpuarray.sum((x_gpu.data - v1act.data)**2) / ndata / x.shape[1]
         return cuda.to_cpu(mse)
 
 
@@ -181,7 +183,7 @@ if __name__=='__main__':
     else:
         bbrbm = True
 
-    data = dataio.dataio(args['<file>'], args['--df'], visnum)
+    data = dataio.dataio(args['<file>'], args['--df'], visnum).astype(np.float32)
     ndata = data.shape[0]
     
     if gpuid < 0:
