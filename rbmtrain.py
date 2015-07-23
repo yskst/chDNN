@@ -34,16 +34,21 @@ class train_cpu:
         self.__f__ = f
         self.__model__ = F.Linear(visnum, hidnum)
         self.__vbias__ = np.zeros(visnum, dtype=np.float32)
-        self.__gvbias__= np.empty_like(self.__vbias__)
+        self.__model_inv__ = F.Linear(hidnum, visnum, 
+                 initialW=self.__model__.W.T.copy()).to_gpu(gpu)
+
+        self.__model__.zero_grads()
+        self.__model_inv__.zero_grads()
+
         if bb:
             self.__inverse__ = self.__inverse_bb
         else:
             self.__inverse__ = self.__inverse_gb
-    
+
     def __inverse_bb(self, x):
-        return self.__f__(x * self.__model__.W.T + self.__vbias__)
+        return self.__f__(self.__model_inv__)
     def __inverse_gb(self, x):
-        return x * self.__model__.W.T + self.__vbias__
+        return self.__model_inv__(x)
 
     def __sampling(self, p):
         """ Samping hidden layer's neuron state from probability. """
@@ -55,7 +60,7 @@ class train_cpu:
         h0act = self.__f__(self.__model__(x_cpu))
         h0smp = self.__sampling(h0act.data)
         v1act = self.__inverse__(Variable(h0smp))
-        h1act = self.__f__(self.__model__.forward_cpu(x))
+        h1act = self.__f__(self.__model__(x))
         
         # Calcurate gradient of each parameter.
         gw = v1act.T*h1act - v0act.T*h0act
