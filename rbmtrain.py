@@ -28,137 +28,147 @@ import chainer.functions as F
 import util,dataio
 
 
-class train_cpu:
-    def __init__(self, visnum, hidnum, seed, f=F.sigmoid, bb=True):
+
+def _create_empty_like(src):
+  if isinstance(src, cuda.GPUArray):
+    return cuda.empty_like(src)
+  else:
+    return np.empty_like(src)
+
+_cudot = cuda.linarg.dot
+_cusum = cuda.linarg.sum
+
+class gbRBM(function.Function):
+""" The Gaussian-Bernoulli Restricted Boltzman Machine(GBRBM) """
+    def __init__(self, vis_size, hid_size, act_func=Function.sigmoid,
+                       init_w=None, init_hbias=None, init_vbias=None, 
+                       seed=1234, wscale=0.01, gb=True):
+        self.W      = None
+        self.gW    = None
+        self.hbias  = None
+        self.ghbias = None
+        self.vbias  = None
+        self.gvbias = None
+        
+        self.seed = seed
+        self.f = act_func
         np.random.seed(seed)
-        self.__f__ = f
-        self.__model__ = F.Linear(visnum, hidnum)
-        self.__vbias__ = np.zeros(visnum, dtype=np.float32)
-        self.__model_inv__ = F.Linear(hidnum, visnum, 
-                 initialW=self.__model__.W.T.copy())
 
-        self.__model__.zero_grads()
-        self.__model_inv__.zero_grads()
-
-        if bb:
-            self.__inverse__ = self.__inverse_bb
+        if init_w is not None:
+            assert init_w.shape == (vis_size, hid_size)
+            self.W = init_w
         else:
-            self.__inverse__ = self.__inverse_gb
+            self.W = np.random.normal(0, wscale, 
+                                    (vis_size, hid_size)).astype(np.float32)
 
-    def __inverse_bb(self, x):
-        return self.__f__(self.__model_inv__(x))
-    def __inverse_gb(self, x):
-        return self.__model_inv__(x)
-
-    def __sampling(self, p):
-        """ Samping hidden layer's neuron state from probability. """
-        return np.random.binomial(1, p=p, size=p.shape).astype(np.float32)
-
-    def train(self, x, lr=0.0, mm=0.0, re=0.0):
-        ndata = x.shape[0]
-        x_cpu = Variable(x)
-
-        h0act = self.__f__(self.__model__(x_cpu))
-        h0smp = self.__sampling(h0act.data)
-        v1act = self.__inverse__(Variable(h0smp))
-        h1act = self.__f__(self.__model__(v1act))
-        
-        # Calcurate gradient of each parameter.
-        gw = F.matmul(v1act,h1act,transa=True).data - F.matmul(x_cpu, h0act, transa=True).data / ndata
-        gb = (np.sum(h1act.data, axis=0) - np.sum(h0act.data,axis=0)) / ndata
-        gvb= (np.sum(v1act.data, axis=0) - np.sum(x_cpu.data,axis=0)) / ndata
-
-        # Calcurate difference for update.
-        self.__model__.gW     = -lr*gw.T  +mm*self.__model__.gW -re*self.__model__.W
-        self.__model__.gb     = -lr*gb  +mm*self.__model__.gb
-        self.__model_inv__.gb = -lr*gvb +mm*self.__model_inv__.gb
-        
-        # Update each parameter.
-        self.__model__.W += self.__model__.gW
-        self.__model__.b += self.__model__.gb
-        self.__model_inv__.W    = self.__model__.W.T.copy()
-        self.__model_inv__.b   += self.__model_inv__.gb
-
-        return np.mean((x-v1act.data)**2)
-
-    def get_param(self):
-        model = self.__model__
-        return mode.W, model.bias, self.__vbias__
-
-class train_gpu(train_cpu):
-    def __init__(self,visnum, hidnum, seed, f=F.sigmoid, bb=True, gpuid=0):
-        if gpuid < 0:
-            util.panic("GPU ID is out of range(>= 0)")
-
-        gpu = cuda.get_device(gpuid)
-        self.gpu = gpu
-        cuda.init(gpuid)
-        # Initialize random number generator.
-        self.__randomgen__ = cuda.get_generator(gpu)
-        cuda.seed(seed, gpu)
-       
-        self.__f__         = f
-        self.__model__     = F.Linear(visnum, hidnum).to_gpu(gpu)
-        self.__model_inv__ = F.Linear(hidnum, visnum, 
-                  initialW=self.__model__.W.T.copy()).to_gpu(gpu)
-        self.__model__.zero_grads()
-        self.__model_inv__.zero_grads()
-
-        if bb:
-            self.__inverse__ = self.__inverse_bb
+        if init_hbias is not None:
+            assert init_hbias.shape == (hid_size,)
+            self.hbias = init_hbias
         else:
-            self.__inverse__ = self.__inverse_gb
-    
-    def __inverse_bb(self, x):
-        return self.__f__(F.linear(x, self.__model__.W.T, self.__vbias__))
-    def __inverse_gb(self, x):
-        return self.__model_inv__(x)
+            self.hbias = np.zeros(hidsize, dtype=np.float32)
+      
+        if init_vbias is not None:
+            assert init_vbias.shape == (visnum,)
+            self.vbias = init_vbias
+        else:
+            self.vbias = np.zeros(visnum, dtype=np.float32)
 
-    def __sampling(self, ndim, p):
-        """ Samping hidden layer's neuron state from probability. """
-        rnd = self.__randomgen__.gen_uniform(p.shape, np.float32) 
-        rnd = p < rnd
-        return Variable(rnd)
-    
-    def __cusum(self, x_variable, axis=None):
-        """ The GPUArray versin of numpy.sum"""
-        return cuda.cumisc.sum(x_variable.data, axis)
+        self.gW     = _create_empty_like(self.w)
+        self.ghbias = _create_empty_like(self.hbias)
+        self.gvbias = _create_empty_like(self.vbias)
+        self.mse = None
 
-    def train(self, x, lr=0.0, mm=0.0, re=0.0):
+
+    _linear_bias_gpu = cuda.elementwise(
+            'float *x, float *b, int ndim',
+            'x[i] += b[i % ndim]',
+            'linear_bias')
+
+    def parameter_names(self):
+        return 'W', 'vbias', 'hbias'
+    def gradient_names(self):
+        return 'gW', 'gvbias', 'ghbias'
+
+    def _linear_cpu(self, x, W, bias):
+        return x.dot(self.W) + b
+    def _linear_gpu(self, x, w, bias):
+        with cuda.using_cumisc():
+            y = cuda.culinalg.dot(x, self.W)
+        self._linear_bias_gpu(y, bias, self.b.size)
+        return y
+
+    
+    def _reconst_cpu(self, h):
+        return self.f(self._linear_cpu(h, self.W.T, self.vbias))
+    def _reconst_gpu(self, p, ndim):
+        return self.f(self._linear_gpu(h, self.W.T, self.vbias))
+
+    def forward_cpu(self, x):
+        h0act = self.f(self._linear_cpu(x, self.W, self.hbias)
+        h0smp = np.radnom.binomial(1, h0act, h0act.shape).astype(np.float32)
+        v1act = _reconst_cpu(h0smp)
+        h1act = self.f(self._linear_cpu(v1act, self.W, self.hbias))
+
+        self.mse = np.mean((x-v1act)**2)
+        return h0act, v1act, h1act
+
+    def forward_gpu(self, x):
+        h0act = self.f(self._linear_gpu(x, self.W, self.hbias))
+        h0smp = h0act < self.randgen.get_uniform(h0act.shape, np.float32)
+        v1act = _reconst_gpu(h0smp)
+        h1act = self.f(self._linear_cpu(v1act, self.W, self.hbias))
+
+        self.mse = cuda.cumisc.mean((x-v1act)**2)
+        return h0act, v1act, h1act
+
+    def backward_cpu(self, x):
         ndata = x.shape[0]
-        x_gpu = Variable(cuda.to_gpu(x,self.gpu))
-        h0act = self.__f__(self.__model__(x_gpu))
-        h0smp = self.__sampling(self.__model__.b.shape, h0act.data)
-        v1act = self.__inverse__(h0smp)
-        h1act = self.__f__(self.__model__(v1act))
+        h0act, v1act, h1act = forward_cpu(x)
+        gW     = (np.dot(v1act.T, h1act) - np.dot(x.T, h0act))    /ndata
+        ghbias = (np.sum(h1act, axis=0) - np .sum(h0act, axis=0)) /ndata 
+        gvbias = (np.sum(v1act, axis=0) - np.sum(x, axis=0))      /ndata
+        return gW, ghbias, gvbias
+
+    def backward_gpu(self, x):
+        ndata = x.shape[0]
+        h0act, v1act, h1act = forward_gpu(x)
+        gW = (_cudot(v1act,h1act, transa=True) - 
+                                    _cudot(x, h0act, transa=True)) / ndata
+        ghbias = (_cusum(h1act, axis=0) - _cusum(h0act,axis=0)) / ndata
+        gvbias = (_cusum(v1act, axis=0) - _cusum(x, axis=0))    / ndata
+        return gW, ghbias, gvbias
+
+    def train_cpu(self, x, lr, mm, re):
+        gW, ghbias, gvbias = backward_cpu(x)
+
+        self.gW = -lr*gW + mm*self.gW -re*self.W
+        self.ghbias = -lr*ghvias +mm*self.ghbias
+        self.gvbias = -lr*gvbias +mm*self.gvbias
         
-        # Calcurate gradient of each parameter.
-        gw = F.matmul(v1act,h1act,transa=True).data - F.matmul(x_gpu,h0act, transa=True).data
-        gb = self.__cusum(h1act,axis=0) - self.__cusum(h0act,axis=0)
-        gvb= self.__cusum(v1act,axis=0) - self.__cusum(x_gpu,axis=0)
+        # MSE is alucurated in forward_cpu called from backward_cpu
+        return self.mse 
+
+    def train_cpu(self, x, lr, mm, re):
+        gW, ghbias, gvbias = backward_cpu(x)
+
+        self.gW = -lr*gW + mm*self.gW -re*self.W
+        self.ghbias = -lr*ghvias +mm*self.ghbias
+        self.gvbias = -lr*gvbias +mm*self.gvbias
         
-        gw /= ndata
-        gb /= ndata
-        gvb /= ndata
-
-        # Calcurate difference for update.
-        self.__model__.gW = -lr*gw.T  +mm*self.__model__.gW -re*self.__model__.W
-        self.__model__.gb      = -lr*gb  +mm*self.__model__.gb
-        self.__model_inv__.gb  = -lr*gvb +mm*self.__model_inv__.gb
-        
-        # Update each parameter.
-        self.__model__.W += self.__model__.gW
-        self.__model__.b += self.__model__.gb
-        self.__model_inv__.W    = self.__model__.W.T.copy()
-        self.__model_inv__.b   += self.__model_inv__.gb
-
-        mse = cuda.gpuarray.sum((x_gpu.data - v1act.data)**2) / ndata / x.shape[1]
-        return cuda.to_cpu(mse)
+        # MSE is alucurated in forward_gpu called from backward_gpu
+        return cuda.to_cpu (self.mse) 
 
 
-    def get_param(self):
-        model = self.__model__
-        return cuda.to_cpu(mode.W), cuda.to_cpu(model.bias), cuda.to_cpu(self.__vbias__)
+    def to_gpu(self, device=None):
+        cuda.seed(self.seed)
+        self.randgen = cuda.get_generator(device)
+        super(RBM, self).to_gpu(device)
+
+class bbRBM(gbRBM):
+   def _reconst_cpu(self, h):
+        return self._linear_cpu(h, self.W.T, self.vbias)
+  def _reconst_gpu(self, p, ndim):
+        return self._linear_gpu(h, self.W.T, self.vbias)
 
 
 
