@@ -38,11 +38,12 @@ def _create_empty_like(src):
 _cudot = cuda.linarg.dot
 _cusum = cuda.linarg.sum
 
+
 class gbRBM(function.Function):
 """ The Gaussian-Bernoulli Restricted Boltzman Machine(GBRBM) """
     def __init__(self, vis_size, hid_size, act_func=Function.sigmoid,
                        init_w=None, init_hbias=None, init_vbias=None, 
-                       seed=1234, wscale=0.01, gb=True):
+                       seed=1234, wscale=0.01):
         self.W      = None
         self.gW    = None
         self.hbias  = None
@@ -148,8 +149,8 @@ class gbRBM(function.Function):
         # MSE is alucurated in forward_cpu called from backward_cpu
         return self.mse 
 
-    def train_cpu(self, x, lr, mm, re):
-        gW, ghbias, gvbias = backward_cpu(x)
+    def train_gpu(self, x, lr, mm, re):
+        gW, ghbias, gvbias = backward_gpu(x)
 
         self.gW = -lr*gW + mm*self.gW -re*self.W
         self.ghbias = -lr*ghvias +mm*self.ghbias
@@ -189,24 +190,25 @@ if __name__=='__main__':
     if rbmtype!="gb" and rbmtype!="bb":
         util.stderr("Unknown RBM type: %s" % rbmtype)
     elif rbmtype == "gb":
-        bbrbm = False
+        rbm = gbRBM(visnum, hidnum)
     else:
-        bbrbm = True
+        rbm = bbRBM(visnum, hidnum)
 
     data = dataio.dataio(args['<file>'], args['--df'], visnum).astype(np.float32)
     ndata = data.shape[0]
     
     if gpuid < 0:
-        trainer = train_cpu(visnum, hidnum, seed, bb=bbrbm)
+        trainer = rbm.train_cpu
     else:
-        trainer = train_gpu(visnum, hidnum, seed, bb=bbrbm, gpuid=gpuid)
-        np.random.seed(seed)
+        trainer = rbm.train_gpu
+        cuda.init()
+        rbm.to_gpu()
 
     for i in range(epoch):
         e = 0.0
         mblst = np.random.permutation(ndata)
 
         for mb in range(0, ndata, mbsize):
-            e += trainer.train(data[mblst[mb:mb+mbsize]], lr, re, mm)
+            e += trainer(data[mblst[mb:mb+mbsize]], lr, re, mm)
         e /= (ndata/mbsize)
         util.stdout("%4d th-epoch mse= %9e\n" % (i, e))
