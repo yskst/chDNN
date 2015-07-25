@@ -118,7 +118,7 @@ class bbRBM(function.Function):
     def forward_gpu(self, x):
         h0act = self.f(Variable( self._linear_gpu(x, self.W, self.hbias)))
         h0act = h0act.data
-        h0smp = h0act < self.randgen.gen_uniform(h0act.shape, np.float32)
+        h0smp = h0act > self.randgen.gen_uniform(h0act.shape, np.float32)
         v1act = self._reconst_gpu(h0smp)
         h1act = self.f(Variable(self._linear_gpu(v1act, self.W, self.hbias)))
         h1act = h1act.data
@@ -150,6 +150,10 @@ class bbRBM(function.Function):
         self.ghbias = -lr*ghbias +mm*self.ghbias
         self.gvbias = -lr*gvbias +mm*self.gvbias
         
+        self.W += self.gw
+        self.hbias = self.ghbias
+        self.vbias = self.gvbias
+        
         # MSE is alucurated in forward_cpu called from backward_cpu
         return self.mse 
 
@@ -161,6 +165,9 @@ class bbRBM(function.Function):
         self.ghbias = -lr*ghbias +mm*self.ghbias
         self.gvbias = -lr*gvbias +mm*self.gvbias
         
+        self.W += self.gw
+        self.hbias = self.ghbias
+        self.vbias = self.gvbias
         # MSE is alucurated in forward_gpu called from backward_gpu
         return cuda.to_cpu (self.mse) 
 
