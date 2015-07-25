@@ -22,7 +22,7 @@ import sys
 from docopt import docopt
 
 import numpy as np
-from chainer import cuda, Variable, FunctionSet
+from chainer import cuda, function, Variable
 import chainer.functions as F
 
 import util,dataio
@@ -30,18 +30,18 @@ import util,dataio
 
 
 def _create_empty_like(src):
-  if isinstance(src, cuda.GPUArray):
-    return cuda.empty_like(src)
-  else:
-    return np.empty_like(src)
+    if isinstance(src, cuda.GPUArray):
+        return cuda.empty_like(src)
+    else:
+        return np.empty_like(src)
 
-_cudot = cuda.linarg.dot
-_cusum = cuda.linarg.sum
+_cudot = cuda.culinalg.dot
+_cusum = cuda.cumisc.sum
 
 
-class gbRBM(function.Function):
-""" The Gaussian-Bernoulli Restricted Boltzman Machine(GBRBM) """
-    def __init__(self, vis_size, hid_size, act_func=Function.sigmoid,
+class bbRBM(function.Function):
+    """ The Gaussian-Bernoulli Restricted Boltzman Machine(GBRBM) """
+    def __init__(self, vis_size, hid_size, act_func=F.sigmoid,
                        init_w=None, init_hbias=None, init_vbias=None, 
                        seed=1234, wscale=0.01):
         self.W      = None
@@ -66,15 +66,15 @@ class gbRBM(function.Function):
             assert init_hbias.shape == (hid_size,)
             self.hbias = init_hbias
         else:
-            self.hbias = np.zeros(hidsize, dtype=np.float32)
+            self.hbias = np.zeros(hid_size, dtype=np.float32)
       
         if init_vbias is not None:
-            assert init_vbias.shape == (visnum,)
+            assert init_vbias.shape == (vis_size,)
             self.vbias = init_vbias
         else:
-            self.vbias = np.zeros(visnum, dtype=np.float32)
+            self.vbias = np.zeros(vis_size, dtype=np.float32)
 
-        self.gW     = _create_empty_like(self.w)
+        self.gW     = _create_empty_like(self.W)
         self.ghbias = _create_empty_like(self.hbias)
         self.gvbias = _create_empty_like(self.vbias)
         self.mse = None
@@ -90,41 +90,45 @@ class gbRBM(function.Function):
     def gradient_names(self):
         return 'gW', 'gvbias', 'ghbias'
 
-    def _linear_cpu(self, x, W, bias):
-        return x.dot(self.W) + b
+    def _linear_cpu(self, x, w, bias):
+        return x.dot(w) + bias
     def _linear_gpu(self, x, w, bias):
         with cuda.using_cumisc():
-            y = cuda.culinalg.dot(x, self.W)
-        self._linear_bias_gpu(y, bias, self.b.size)
+            y = cuda.culinalg.dot(x, w)
+        self._linear_bias_gpu(y, bias, bias.size)
         return y
 
     
     def _reconst_cpu(self, h):
-        return self.f(self._linear_cpu(h, self.W.T, self.vbias))
-    def _reconst_gpu(self, p, ndim):
-        return self.f(self._linear_gpu(h, self.W.T, self.vbias))
+        return self.f(self._linear_cpu(h, self.W.T.copy(), self.vbias))
+    def _reconst_gpu(self, h):
+        return self.f(self._linear_gpu(h, self.W.T.copy(), self.vbias))
 
     def forward_cpu(self, x):
-        h0act = self.f(self._linear_cpu(x, self.W, self.hbias)
-        h0smp = np.radnom.binomial(1, h0act, h0act.shape).astype(np.float32)
-        v1act = _reconst_cpu(h0smp)
-        h1act = self.f(self._linear_cpu(v1act, self.W, self.hbias))
+        h0act = self.f(Variable(self._linear_cpu(x, self.W, self.hbias)))
+        h0act = h0act.data
+        h0smp = np.random.binomial(1, h0act, h0act.shape).astype(np.float32)
+        v1act = self._reconst_cpu(h0smp)
+        h1act = self.f(Variable(self._linear_cpu(v1act, self.W, self.hbias)))
+        h1act = h1act.data
 
         self.mse = np.mean((x-v1act)**2)
         return h0act, v1act, h1act
 
     def forward_gpu(self, x):
-        h0act = self.f(self._linear_gpu(x, self.W, self.hbias))
-        h0smp = h0act < self.randgen.get_uniform(h0act.shape, np.float32)
-        v1act = _reconst_gpu(h0smp)
-        h1act = self.f(self._linear_cpu(v1act, self.W, self.hbias))
-
+        h0act = self.f(Variable( self._linear_gpu(x, self.W, self.hbias)))
+        h0act = h0act.data
+        h0smp = h0act < self.randgen.gen_uniform(h0act.shape, np.float32)
+        v1act = self._reconst_gpu(h0smp)
+        h1act = self.f(Variable(self._linear_gpu(v1act, self.W, self.hbias)))
+        h1act = h1act.data
+        
         self.mse = cuda.cumisc.mean((x-v1act)**2)
         return h0act, v1act, h1act
 
     def backward_cpu(self, x):
         ndata = x.shape[0]
-        h0act, v1act, h1act = forward_cpu(x)
+        h0act, v1act, h1act = self.forward_cpu(x)
         gW     = (np.dot(v1act.T, h1act) - np.dot(x.T, h0act))    /ndata
         ghbias = (np.sum(h1act, axis=0) - np .sum(h0act, axis=0)) /ndata 
         gvbias = (np.sum(v1act, axis=0) - np.sum(x, axis=0))      /ndata
@@ -132,28 +136,29 @@ class gbRBM(function.Function):
 
     def backward_gpu(self, x):
         ndata = x.shape[0]
-        h0act, v1act, h1act = forward_gpu(x)
-        gW = (_cudot(v1act,h1act, transa=True) - 
-                                    _cudot(x, h0act, transa=True)) / ndata
+        h0act, v1act, h1act = self.forward_gpu(x)
+        gW = (_cudot(v1act,h1act, transa='T') - 
+                               _cudot(x, h0act, transa='T')) / ndata
         ghbias = (_cusum(h1act, axis=0) - _cusum(h0act,axis=0)) / ndata
         gvbias = (_cusum(v1act, axis=0) - _cusum(x, axis=0))    / ndata
         return gW, ghbias, gvbias
 
     def train_cpu(self, x, lr, mm, re):
-        gW, ghbias, gvbias = backward_cpu(x)
+        gW, ghbias, gvbias = self.backward_cpu(x)
 
         self.gW = -lr*gW + mm*self.gW -re*self.W
-        self.ghbias = -lr*ghvias +mm*self.ghbias
+        self.ghbias = -lr*ghbias +mm*self.ghbias
         self.gvbias = -lr*gvbias +mm*self.gvbias
         
         # MSE is alucurated in forward_cpu called from backward_cpu
         return self.mse 
 
     def train_gpu(self, x, lr, mm, re):
-        gW, ghbias, gvbias = backward_gpu(x)
+        x_gpu = cuda.to_gpu(x)
+        gW, ghbias, gvbias = self.backward_gpu(x_gpu)
 
         self.gW = -lr*gW + mm*self.gW -re*self.W
-        self.ghbias = -lr*ghvias +mm*self.ghbias
+        self.ghbias = -lr*ghbias +mm*self.ghbias
         self.gvbias = -lr*gvbias +mm*self.gvbias
         
         # MSE is alucurated in forward_gpu called from backward_gpu
@@ -163,13 +168,13 @@ class gbRBM(function.Function):
     def to_gpu(self, device=None):
         cuda.seed(self.seed)
         self.randgen = cuda.get_generator(device)
-        super(RBM, self).to_gpu(device)
+        super(bbRBM, self).to_gpu(device)
 
-class bbRBM(gbRBM):
+class gbRBM(bbRBM):
    def _reconst_cpu(self, h):
-        return self._linear_cpu(h, self.W.T, self.vbias)
-  def _reconst_gpu(self, p, ndim):
-        return self._linear_gpu(h, self.W.T, self.vbias)
+       return self._linear_cpu(h, self.W.T.copy(), self.vbias)
+   def _reconst_gpu(self, h):
+       return self._linear_gpu(h, self.W.T.copy(), self.vbias)
 
 
 
