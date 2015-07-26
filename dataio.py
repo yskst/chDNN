@@ -53,7 +53,10 @@ def dataio(f, fmt, ndim=None):
         if ndim:
             return np.reshape(m, (-1, ndim))
         return m
-        
+
+def saveRBM(f, rbm):
+    np.savez(f, W_0=rbm.W, bias_0=rbm.hbias, vbias_0=rbm.vbias, f_0=rbm.f.__name__)
+
 
 if __name__=='__main__':
     if len(sys.argv) < 2:
