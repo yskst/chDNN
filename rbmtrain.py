@@ -43,7 +43,7 @@ class bbRBM(function.Function):
     """ The Gaussian-Bernoulli Restricted Boltzman Machine(GBRBM) """
     def __init__(self, vis_size, hid_size, act_func=F.sigmoid,
                        init_w=None, init_hbias=None, init_vbias=None, 
-                       seed=1234, wscale=0.001):
+                       seed=1234, wscale=1e-2):
         self.W      = None
         self.gW    = None
         self.hbias  = None
@@ -121,7 +121,7 @@ class bbRBM(function.Function):
         h1act = h1act.data
 
         self.mse = np.mean((x-v1act)**2)
-        return h0act, v1act, h1act
+        return h0smp, v1act, h1act
 
     def forward_gpu(self, x):
         h0act = self.f(Variable( self._linear_gpu(x, self.W, self.hbias)))
@@ -132,7 +132,7 @@ class bbRBM(function.Function):
         h1act = h1act.data
         
         self.mse = cuda.cumisc.mean((x-v1act)**2)
-        return h0act, v1act, h1act
+        return h0smp, v1act, h1act
 
     def backward_cpu(self, x):
         ndata = x.shape[0]
@@ -180,8 +180,8 @@ class bbRBM(function.Function):
         return cuda.to_cpu (self.mse) 
 
     def to_gpu(self, device=None):
-        cuda.seed(self.seed)
         self.randgen = cuda.get_generator(device)
+        cuda.seed(self.seed)
         super(bbRBM, self).to_gpu(device)
 
 class gbRBM(bbRBM):
