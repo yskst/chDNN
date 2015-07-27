@@ -29,7 +29,7 @@ import util,dataio
 
 
 
-def _create_empty_like(src):
+def _empty_like(src):
     if isinstance(src, cuda.GPUArray):
         return cuda.empty_like(src)
     else:
@@ -43,7 +43,7 @@ class bbRBM(function.Function):
     """ The Gaussian-Bernoulli Restricted Boltzman Machine(GBRBM) """
     def __init__(self, vis_size, hid_size, act_func=F.sigmoid,
                        init_w=None, init_hbias=None, init_vbias=None, 
-                       seed=1234, wscale=1e-2):
+                       seed=1234, wscale=1e-4):
         self.W      = None
         self.gW    = None
         self.hbias  = None
@@ -77,9 +77,9 @@ class bbRBM(function.Function):
         else:
             self.vbias = np.zeros(vis_size, dtype=np.float32)
 
-        self.gW     = _create_empty_like(self.W)
-        self.ghbias = _create_empty_like(self.hbias)
-        self.gvbias = _create_empty_like(self.vbias)
+        self.gW     = _empty_like(self.W)
+        self.ghbias = _empty_like(self.hbias)
+        self.gvbias = _empty_like(self.vbias)
         self.mse = None
 
     def init_grads(self):
@@ -136,9 +136,9 @@ class bbRBM(function.Function):
 
     def backward_cpu(self, x):
         ndata = x.shape[0]
-        h0act, v1act, h1act = self.forward_cpu(x)
+        h0smp, v1act, h1act = self.forward_cpu(x)
         gW     = (np.dot(v1act.T, h1act) - np.dot(x.T, h0act))    /ndata
-        ghbias = (np.sum(h1act, axis=0) - np .sum(h0act, axis=0)) /ndata 
+        ghbias = (np.sum(h1act, axis=0) - np .sum(h0smp, axis=0)) /ndata 
         gvbias = (np.sum(v1act, axis=0) - np.sum(x, axis=0))      /ndata
         return gW, ghbias, gvbias
 
@@ -151,7 +151,7 @@ class bbRBM(function.Function):
         gvbias = (_cusum(v1act, axis=0) - _cusum(x, axis=0))    / ndata
         return gW, ghbias, gvbias
 
-    def train_cpu(self, x, lr=0.0, mm=0.0, re=0.0):
+    def train_cpu(self, x, lr, mm, re):
         gW, ghbias, gvbias = self.backward_cpu(x)
 
         self.gW     = -lr*gW     +mm*self.gW     -re*self.W
@@ -165,10 +165,10 @@ class bbRBM(function.Function):
         # MSE is calucurated in forward_cpu called from backward_cpu
         return self.mse 
 
-    def train_gpu(self, x, lr=0.0, mm=0.0, re=0.0):
+    def train_gpu(self, x, lr, mm, re):
         x_gpu = cuda.to_gpu(x)
         gW, ghbias, gvbias = self.backward_gpu(x_gpu)
-
+        
         self.gW     = -lr*gW     +mm*self.gW     -re*self.W
         self.ghbias = -lr*ghbias +mm*self.ghbias
         self.gvbias = -lr*gvbias +mm*self.gvbias
@@ -232,7 +232,8 @@ if __name__=='__main__':
         mblst = np.random.permutation(ndata)
 
         for mb in range(0, ndata, mbsize):
-            e += trainer(data[mblst[mb:mb+mbsize]], lr, mm, re)
+            tmp = trainer(data[mblst[mb:mb+mbsize]], lr, mm, re)
+            e += tmp
         e /= mbnum
         t2 = time.clock()
         util.stdout("%4d th-epoch mse= %9e %f sec\n" % (i, e, t2-t1))
