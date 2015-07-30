@@ -43,7 +43,7 @@ class bbRBM(function.Function):
     """ The Gaussian-Bernoulli Restricted Boltzman Machine(GBRBM) """
     def __init__(self, vis_size, hid_size, act_func=F.sigmoid,
                        init_w=None, init_hbias=None, init_vbias=None, 
-                       seed=1234, wscale=1e-4):
+                       seed=1234, wscale=1e-3):
         self.W      = None
         self.gW    = None
         self.hbias  = None
@@ -53,7 +53,6 @@ class bbRBM(function.Function):
         
         self.seed = seed
         self.f = act_func
-        np.random.seed(seed)
 
         if init_w is not None:
             assert init_w.shape == (vis_size, hid_size)
@@ -108,9 +107,9 @@ class bbRBM(function.Function):
 
     
     def _reconst_cpu(self, h):
-        return self.f(self._linear_cpu(h, self.W.T.copy(), self.vbias)).data
+        return self.f(Variable(self._linear_cpu(h, self.W.T.copy(), self.vbias))).data
     def _reconst_gpu(self, h):
-        return self.f(self._linear_gpu(h, self.W.T.copy(), self.vbias)).data
+        return self.f(Variable(self._linear_gpu(h, self.W.T.copy(), self.vbias))).data
 
     def forward_cpu(self, x):
         h0act = self.f(Variable(self._linear_cpu(x, self.W, self.hbias)))
@@ -185,10 +184,11 @@ class bbRBM(function.Function):
         super(bbRBM, self).to_gpu(device)
 
 class gbRBM(bbRBM):
-   def _reconst_cpu(self, h):
-       return self._linear_cpu(h, self.W.T.copy(), self.vbias)
-   def _reconst_gpu(self, h):
-       return self._linear_gpu(h, self.W.T.copy(), self.vbias)
+    def _reconst_cpu(self, h):
+        return self._linear_cpu(h, self.W.T.copy(), self.vbias)
+    def _reconst_gpu(self, h):
+        return self._linear_gpu(h, self.W.T.copy(), self.vbias)
+
 
 
 
@@ -225,18 +225,18 @@ if __name__=='__main__':
         rbm.to_gpu()
 
     rbm.init_grads()
+    np.random.seed(seed)
     mbnum = ndata / mbsize
     for i in range(epoch):
         t1 = time.clock()
         e = 0.0
         mblst = np.random.permutation(ndata)
-
         for mb in range(0, ndata, mbsize):
             tmp = trainer(data[mblst[mb:mb+mbsize]], lr, mm, re)
             e += tmp
         e /= mbnum
         t2 = time.clock()
-        util.stdout("%4d th-epoch mse= %9e %f sec\n" % (i, e, t2-t1))
+        util.stdout("%4d th-epoch mse= %9e (%f sec)\n" % (i, e, t2-t1))
         sys.stdout.flush()
 
     dataio.saveRBM(outf, rbm)
