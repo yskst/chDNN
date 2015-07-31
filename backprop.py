@@ -11,7 +11,7 @@ options:
    --of=<file>   output file name.(npz file)
    --df=<str>    sample data format flags.The flag's detail is follow.
    --tf=<str>    the target data format flags.
-   --ot=<c|f>    The target type is feature or category. 
+   --tt=<c|f>    The target type is feature or category. 
    --mb=<num>    mini-batch size.
    -e <num> --epoch=<num>   the number of ephoch.
    --lr <val>    learning rate [default: 0] 
@@ -82,7 +82,7 @@ if __name__=='__main__':
 
     outform = args['--of']
     tarform = args['--tf']
-    otype   = args['--ot']
+    ttype   = args['--tt']
     rbmtype = args['--rt']
     nn      = args['--mlp']
     gpu     = int(args['--gpu'])
@@ -92,11 +92,43 @@ if __name__=='__main__':
     mm      = float(args['--mm'])
     re      = float(args['--re'])
     seed    = int(args['--seed'])
-    tar     = args['<tar>']
+    tarf    = args['<tar>']
     trainf  = args['<file>']
 
 
     model, actfs = _load_nn(nn)
     optimizer = opimizers.MomentumSGD(lr=lr,momentum=mm)
     optimizer.setup(model.collect_parameters())
-    optimizer.zero_grads()
+    
+    nlayer = len(actfs)
+    idim = model.l0.W.shape[1]
+    odim = getattr(model, 'l'+str(nlayer-1)).W.shape[0]
+
+
+    data = dataio.dataio(trainf, outform, idim).astype(np.float32)
+    
+    if otype == 'c':
+        forward = forward_cross_entoropy
+        tar = dataio.dataio(tarf, tarform).astype(np.int32)
+    elif otype == 'f':
+        forward = forward_mse
+        tar = data.dataio(tarf, tarform, 0).astype(np.float32)
+
+    ndata = data.shape[0]
+    nmb = ndata / mbsize
+    for i in range(epoch):
+        mse = 0.0
+        mean_acc = 0.0
+        mb = np.random.permutation(ndata)
+        for i in range(0, ndata, mbsize):
+            optimizer.zero_grads()
+            loss, acc = forward(x[mb[i:i+mbsize]], tar[mb[i:i+mbsize]])
+            loss.backward()
+            optimizer.update()
+            mse += loss.data
+            mean_acc += acc.data
+        mse /= nmb
+        mean_acc /= nmb
+        util.stdout('%4d th, mse= %.8e mean_of_acc= %.8e'% (i, mse, mean_acc))
+        sys.stdout.flush()
+
