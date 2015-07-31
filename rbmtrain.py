@@ -43,7 +43,7 @@ class bbRBM(function.Function):
     """ The Gaussian-Bernoulli Restricted Boltzman Machine(GBRBM) """
     def __init__(self, vis_size, hid_size, act_func=F.sigmoid,
                        init_w=None, init_hbias=None, init_vbias=None, 
-                       seed=1234, wscale=1e-3):
+                       seed=1234, wscale=1e-2):
         self.W      = None
         self.gW    = None
         self.hbias  = None
@@ -144,10 +144,11 @@ class bbRBM(function.Function):
     def backward_gpu(self, x):
         ndata = x.shape[0]
         h0act, v1act, h1act = self.forward_gpu(x)
-        gW = (_cudot(v1act,h1act, transa='T') - 
-                               _cudot(x, h0act, transa='T'))    / ndata
+        gW = (_cudot(v1act,h1act, transa='T') - _cudot(x, h0act, transa='T'))    / ndata
         ghbias = (_cusum(h1act, axis=0) - _cusum(h0act,axis=0)) / ndata
         gvbias = (_cusum(v1act, axis=0) - _cusum(x, axis=0))    / ndata
+
+        print cuda.cumisc.mean(gW**2)
         return gW, ghbias, gvbias
 
     def train_cpu(self, x, lr, mm, re):
@@ -236,7 +237,7 @@ if __name__=='__main__':
             e += tmp
         e /= mbnum
         t2 = time.clock()
-        util.stdout("%4d th-epoch mse= %9e (%f sec)\n" % (i, e, t2-t1))
+        #util.stdout("%4d th-epoch mse= %9e (%f sec)\n" % (i, e, t2-t1))
         sys.stdout.flush()
 
     dataio.saveRBM(outf, rbm)
