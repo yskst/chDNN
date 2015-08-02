@@ -6,12 +6,12 @@ Usage:
   trainrbm.py -h | --help
 options:
    -h, --help    Show this help.
-   --gpu=<NUM>   The id of GPU. If -1, processing on CPU. [default: 0]
-   --mlp=<FILE>   The initial values of MLP parameter.
+   --cpu         Process on the CPU.
+   --mlp=<FILE>  The initial values of MLP parameter.
    --of=<file>   output file name.(npz file)
    --df=<str>    sample data format flags.The flag's detail is follow.
    --tf=<str>    the target data format flags.
-   --tt=<c|f>    The target type is feature or category. 
+   --tt=<c|f>    The target type is category or feature. 
    --mb=<num>    mini-batch size.
    -e <num> --epoch=<num>   the number of ephoch.
    --lr <val>    learning rate [default: 0] 
@@ -62,7 +62,8 @@ def forward_mse(x_data, y_data, model, actf):
     for i in range(1, len(actf)):
         m = getattr(model, 'l'+str(i))
         h = actf[i](m(h))
-    return F.mean_squared_error(h, y)
+    e = mean_squared_error(h, y)
+    return e,e
 
 def forward_cross_entoropy(x_data, y_data, model, actf):
     x = Variable(x_data)
@@ -85,7 +86,7 @@ if __name__=='__main__':
     ttype   = args['--tt']
     rbmtype = args['--rt']
     nn      = args['--mlp']
-    gpu     = int(args['--gpu'])
+    gpu     = ! args['--cpu']
     mbsize  = int(args['--mb'])
     epoch   = int(args['--epoch'])
     lr      = float(args['--lr'])
@@ -97,6 +98,10 @@ if __name__=='__main__':
 
 
     model, actfs = _load_nn(nn)
+    if gpu:
+        cuda.init()
+        model.to_gpu()
+
     optimizer = opimizers.MomentumSGD(lr=lr,momentum=mm)
     optimizer.setup(model.collect_parameters())
     
@@ -116,19 +121,27 @@ if __name__=='__main__':
 
     ndata = data.shape[0]
     nmb = ndata / mbsize
+    np.random.seed(seed)
     for i in range(epoch):
         mse = 0.0
         mean_acc = 0.0
         mb = np.random.permutation(ndata)
         for i in range(0, ndata, mbsize):
+            x_batch = data[mb[i:i+mbsize]]
+            y_batch = tar[mb[i:i+mbsize]]
+
+            if gpu:
+                x_batch = cuda.to_gpu(x_batch)
+                y_batch = cuda.to_gpu(y_batch)
+
             optimizer.zero_grads()
-            loss, acc = forward(x[mb[i:i+mbsize]], tar[mb[i:i+mbsize]])
+            loss, acc = forward(x_batch, y_batch)
             loss.backward()
             optimizer.update()
             mse += loss.data
             mean_acc += acc.data
         mse /= nmb
         mean_acc /= nmb
-        util.stdout('%4d th, mse= %.8e mean_of_acc= %.8e'% (i, mse, mean_acc))
+        util.stdout('%4d th, mse= %.8e mean_of_acc= %.8e\n'% (i, mse, mean_acc))
         sys.stdout.flush()
 
