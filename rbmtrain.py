@@ -43,7 +43,7 @@ class bbRBM(function.Function):
     """ The Gaussian-Bernoulli Restricted Boltzman Machine(GBRBM) """
     def __init__(self, vis_size, hid_size, act_func=F.sigmoid,
                        init_w=None, init_hbias=None, init_vbias=None, 
-                       seed=1234, wscale=1e-1):
+                       seed=1234, wscale=1e-2):
         self.W      = None
         self.gW    = None
         self.hbias  = None
@@ -53,7 +53,7 @@ class bbRBM(function.Function):
         
         self.seed = seed
         self.f = act_func
-
+        
         if init_w is not None:
             assert init_w.shape == (vis_size, hid_size)
             self.W = init_w
@@ -62,7 +62,7 @@ class bbRBM(function.Function):
                         low=-4.0*np.sqrt(6.0/(vis_size+hid_size)),
                         high=4.0*np.sqrt(6.0/(vis_size+hid_size)),
                         size=(vis_size, hid_size)).astype(np.float32)
-            #self.W = np.random.normal(0, wscale,(vis_size, hid_size)).astype(np.float32)
+            #self.W = np.random.RandomState(seed).normal(0, wscale,(vis_size, hid_size)).astype(np.float32)
 
         if init_hbias is not None:
             assert init_hbias.shape == (hid_size,)
@@ -100,8 +100,9 @@ class bbRBM(function.Function):
     def _linear_cpu(self, x, w, bias):
         return x.dot(w) + bias
     def _linear_gpu(self, x, w, bias):
+        y = cuda.empty((x.shape[0], w.shape[1]), dtype=x.dtype)
         with cuda.using_cumisc():
-            y = cuda.culinalg.dot(x, w)
+            cuda.culinalg.dot(x, w, out=y)
         self._linear_bias_gpu(y, bias, bias.size)
         return y
 
