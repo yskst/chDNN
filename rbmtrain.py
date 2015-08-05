@@ -97,12 +97,14 @@ class bbRBM(function.Function):
     def gradient_names(self):
         return 'gW', 'gvbias', 'ghbias'
 
-    def _linear_cpu(self, x, w, bias):
-        return x.dot(w) + bias
-    def _linear_gpu(self, x, w, bias):
-        y = cuda.empty((x.shape[0], w.shape[1]), dtype=x.dtype)
+    def _linear_cpu(self, x, w, bias, transw='N'):
+        if transw=='N':
+            return x.dot(w) + bias
+        else:
+            return x.dot(w.T) + bias
+    def _linear_gpu(self, x, w, bias, transw='N'):
         with cuda.using_cumisc():
-            cuda.culinalg.dot(x, w, out=y)
+            y = cuda.culinalg.dot(x, w, transb=transw)
         self._linear_bias_gpu(y, bias, bias.size)
         return y
 
@@ -188,7 +190,7 @@ class gbRBM(bbRBM):
     def _reconst_cpu(self, h):
         return self._linear_cpu(h, self.W.T.copy(), self.vbias)
     def _reconst_gpu(self, h):
-        return self._linear_gpu(h, self.W.T.copy(), self.vbias)
+        return self._linear_gpu(h, self.W, self.vbias, 'T')
 
 
 
