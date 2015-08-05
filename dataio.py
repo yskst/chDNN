@@ -16,8 +16,16 @@ def __parse_flags__(fmt):
     elif e == "ne": r = "="
     else:
         raise NameError("The encoding %s is unknown." % fmt)
+   return r + fmt[0:2]
 
-    return r + fmt[0:2]
+ def _str2actf(s):
+    sl = str(s).lower()
+    if   sl == "sigmoid" or sl == "sigmoidlayer": return F.sigmoid
+    elif sl == "softmax" or sl == "softmaxlayer": return F.softmax
+    elif sl == "relu":   or sl == "relulayer":  return F.relu
+    elif sl == "tanh":   or sl == "tanhlayer": return F.tanh
+    else:
+        util.panic("Unknown activate function name %s \n" % s)
 
 def get_flags_doc():
     s ="""    
@@ -54,8 +62,25 @@ def dataio(f, fmt, ndim=None):
             return np.reshape(m, (-1, ndim))
         return m
 
-def saveRBM(f, rbm):
-    np.savez(f, W_0=rbm.W, bias_0=rbm.hbias, vbias_0=rbm.vbias, f_0=rbm.f.__name__)
+def saveRBM(f, func, w, hbias, vbias=None):
+    """ Save RBM parameter. 
+        Prameters:
+            f:     File like object to save
+            func:  Activate function.
+            w:     Weight parameter.(outsize, insize)
+            hbias: Bias parameter of hidden layer.
+            vbias: Bias paramter of visible layer.
+    """
+    if vbias is not None:
+        assert w.shape == (hbias.shape[0], vbias.shape[0])
+        d = {'type_0':func.__name__, 'w_0':w, 'hbias_0':hbias, 'vbias_0':vbias}
+    else:
+        assert w.shape[0] == hbias.shape[0]
+        d = {'type_0':func.__name__, 'w_0':w, 'hbias_0':hbias}
+        
+    np.savez(f, **d)
+
+    
 
 
 if __name__=='__main__':
