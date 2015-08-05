@@ -34,8 +34,8 @@ def _str2actf(s):
     sl = str(s).lower()
     if   sl == "sigmoid" or sl == "sigmoidlayer": return F.sigmoid
     elif sl == "softmax" or sl == "softmaxlayer": return F.softmax
-    elif sl == "relu":    return F.relu
-    elif sl == "tanh":    return F.tanh
+    elif sl == "relu":   or sl == "relulayer":  return F.relu
+    elif sl == "tanh":   or sl == "tanhlayer": return F.tanh
     else:
         util.panic("Unknown activate function name %s \n" % s)
 
@@ -54,25 +54,35 @@ def _load_nn(fileobj):
     model = FunctionSet(**params)
     return model, actfs
 
-def forward_mse(x_data, y_data, model, actf):
+def forward_mse(x_data, y_data, model, actf, dr=False):
     x = Variable(x_data)
     y = Variable(y_data)
     h = actf[0](model.l0(x))
+    use_dr = False
+    if dr and dr != 0.0:
+        use_dr = True
+
     for i in range(1, len(actf)):
         m = getattr(model, 'l'+str(i))
-        h = actf[i](m(h))
+        h = F.dropout(actf[i](m(h)), ratio=dr, train=use_dr)
     e = mean_squared_error(h, y)
     return e,e
 
-def forward_cross_entoropy(x_data, y_data, model, actf):
+
+def forward_cross_entoropy(x_data, y_data, model, actf. dr=False):
     x = Variable(x_data)
     y = Variable(y_data)
     h = actf[0](model.l0(x))
+    
+    use_dr=False
+    if dr and dr != 0.0:
+        use_dr=True
+
     l = len(actf)
     for i in range(1, l):
         m = getattr(model, 'l'+str(i))
         if i < l-1:
-            h = actf[i](m(h))
+            h = F.dropout(actf[i](m(h)), ratio=dr, train=use_dr)
         else:
             h = m(h)
     return F.softmax_cross_entropy(h, y), F.accuracy(h,y)
@@ -90,6 +100,7 @@ if __name__=='__main__':
     lr      = float(args['--lr'])
     mm      = float(args['--mm'])
     re      = float(args['--re'])
+    dr      = float(args['--dr'])
     seed    = int(args['--seed'])
     tarf    = args['<tar>']
     trainf  = args['<file>']
@@ -132,7 +143,7 @@ if __name__=='__main__':
                 y_batch = cuda.to_gpu(y_batch)
 
             optimizer.zero_grads()
-            loss, acc = forward(x_batch, y_batch, model, actfs)
+            loss, acc = forward(x_batch, y_batch, model, actfs, dr)
             loss.backward()
             optimizer.update()
             mse += loss.data
