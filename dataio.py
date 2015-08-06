@@ -4,6 +4,10 @@
 import sys
 import numpy as np
 
+from chainer import FunctionSet
+import chainer.funcions as F
+
+
 import util
 
 
@@ -71,16 +75,37 @@ def saveRBM(f, func, w, hbias, vbias=None):
             hbias: Bias parameter of hidden layer.
             vbias: Bias paramter of visible layer.
     """
+    assert w.shape[0] == hbias.shape[0]
+    d = {'type_0':func.__name__, 'w_0':w, 'hbias_0':hbias}
     if vbias is not None:
-        assert w.shape == (hbias.shape[0], vbias.shape[0])
-        d = {'type_0':func.__name__, 'w_0':w, 'hbias_0':hbias, 'vbias_0':vbias}
-    else:
-        assert w.shape[0] == hbias.shape[0]
-        d = {'type_0':func.__name__, 'w_0':w, 'hbias_0':hbias}
-        
+        d['vbias_0'] = vbias
     np.savez(f, **d)
 
-    
+def savenn(f, model, actf):
+    nlayer = len(actf)
+    d = {}
+    for i in range(nlayer):
+        s = str(i)
+        l = getattr(model, 'l_'+s)
+        d['w_'+s] = l.W
+        d['hbias_'+s] = l.bias
+        d['type_'+s] = actf[i].__name__
+    np.savez(f, **d)
+
+def loadnn(f):
+    """ Load RBM or Neural Network prameter from file like object. """
+    d = np.load(f)
+    params = {}
+    actfs = []
+    i = 0
+    while 'type_'+str(i) in d.keys():
+        s = str(i)
+        params['l_'+s] = F.linear(w.shape[0], w.shape[1], 
+                            initalW=d['w_'+s], initial_bias=d['hbias_'+s])
+        actfs.append(_str2actf(d['type_'+s]) )
+        i+=1
+    model = FunctionSet(**params)
+    return model, actfs
 
 
 if __name__=='__main__':
