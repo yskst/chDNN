@@ -58,11 +58,11 @@ class bbRBM(function.Function):
             assert init_w.shape == (vis_size, hid_size)
             self.W = init_w
         else:
-            self.W = np.random.RandomState(seed).uniform(
+            """self.W = np.random.RandomState(seed).uniform(
                         low=-4.0*np.sqrt(6.0/(vis_size+hid_size)),
                         high=4.0*np.sqrt(6.0/(vis_size+hid_size)),
-                        size=(vis_size, hid_size)).astype(np.float32)
-            #self.W = np.random.RandomState(seed).normal(0, wscale,(vis_size, hid_size)).astype(np.float32)
+                        size=(vis_size, hid_size)).astype(np.float32)"""
+            self.W = np.random.RandomState(seed).normal(0, wscale,(vis_size, hid_size)).astype(np.float32)
 
         if init_hbias is not None:
             assert init_hbias.shape == (hid_size,)
@@ -110,9 +110,9 @@ class bbRBM(function.Function):
 
     
     def _reconst_cpu(self, h):
-        return self.f(Variable(self._linear_cpu(h, self.W.T.copy(), self.vbias))).data
+        return self.f(Variable(self._linear_cpu(h, self.W, self.vbias, 'T'))).data
     def _reconst_gpu(self, h):
-        return self.f(Variable(self._linear_gpu(h, self.W.T.copy(), self.vbias))).data
+        return self.f(Variable(self._linear_gpu(h, self.W, self.vbias, 'T'))).data
 
     def forward_cpu(self, x):
         h0act = self.f(Variable(self._linear_cpu(x, self.W, self.hbias)))
