@@ -241,4 +241,4 @@ if __name__=='__main__':
         util.stdout("%4d th-epoch mse= %9e (%f sec)\n" % (i, e, t2-t1))
         sys.stdout.flush()
 
-    dataio.saveRBM(outf, rbm)
+    dataio.saveRBM(outf, rbm.f, rbm.w.T, rbm.vbias, rbm.hbias)
