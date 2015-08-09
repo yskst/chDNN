@@ -122,6 +122,7 @@ if __name__=='__main__':
             loss, acc = forward(x_batch, y_batch, model, actfs, dr)
             loss.backward()
             optimizer.update()
+            optimizer.weight_decay(re) # L2 reguralization.
             mse += loss.data
             mean_acc += acc.data
         mse = cuda.to_cpu(mse)

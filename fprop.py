@@ -65,5 +65,16 @@ if __name__=='__main__':
             y = cuda.to_cpu(y)
         y.byteswap(be)
         y.tofile(f)
+    
+    nbatch = ndata/mbsize
+    x_batch = data[nbatch*mbsize:]
+    if gpu:
+        x_batch = cuda.to_gpu(x_batch)
+    y = forward(x_batch).data
+    if gpu:
+        y = cuda.to_cpu(y)
+    y.byteswap(be)
+    y.tofile(f)
+
     f.close()
 
