@@ -2,8 +2,8 @@
 
 """Convert from  RBMs to MLP.
 Usage: 
-  trainrbm.py [options] <files>...
-  trainrbm.py -h | --help
+  rbms2mlp.py [options] <files>...
+  rbms2mlp.py -h | --help
 options:
    -h, --help    Show this help.
    --of=<file>   output file name.(npz file)
@@ -18,7 +18,7 @@ import util,dataio
 if __name__=='__main__':
     args = docopt(__doc__)
     of = args["--of"]
-    files = args["files"]
+    files = args["<files>"]
     d = {}
     for i, f in enumerate(files):
         s = str(i)
@@ -26,4 +26,4 @@ if __name__=='__main__':
         d['w_'+s]     = rbm['w_0']
         d['hbias_'+s] = rbm['hbias_0']
         d['type_'+s]  = rbm['type_0']
-    np.savez(f, **d)
+    np.savez(of, **d)

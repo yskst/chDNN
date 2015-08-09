@@ -6,7 +6,7 @@ Usage:
   trainrbm.py -h | --help
 options:
    -h, --help    Show this help.
-   --gpu=<NUM>   The id of GPU. If -1, processing on CPU. [default: 0]
+   --cpu         Run on CPU
    --of=<file>   output file name.(npz file)
    --df=<str>    sample data format flags.The flag's detail is follow.
    --mb=<num>    mini-batch size.
@@ -15,6 +15,7 @@ options:
    --mm <val>    momentum [default: 0] 
    --re <val>    regulalizer. [default: 0]
    --rt <bb|rb>  bb=bernoulli-bernoulli, gb=gaussian-bernoulli.
+   --af <str>    Activate function.[default: Sigmoid]
    --seed <NUM>  The seed of random value. [default: 1234]
 """ 
 
@@ -200,12 +201,13 @@ if __name__=='__main__':
     
     outf    = args['--of']
     rbmtype = args['--rt']
-    gpuid  = int(args['--gpu'])
+    gpu  = not args['--cpu']
     mbsize = int(args['--mb'])
     epoch  = int(args['--epoch'])
     lr = float(args['--lr'])
     mm = float(args['--mm'])
     re = float(args['--re'])
+    actf = args['--af']
     seed = int(args['--seed'])
     visnum = int(args['<visnum>'])
     hidnum = int(args['<hidnum>'])
@@ -216,11 +218,13 @@ if __name__=='__main__':
         rbm = gbRBM(visnum, hidnum, seed=seed)
     else:
         rbm = bbRBM(visnum, hidnum)
+    
+    af = dataio.str2actf(actf)
 
     data = dataio.dataio(args['<file>'], args['--df'], visnum).astype(np.float32)
     ndata = data.shape[0]
     
-    if gpuid < 0:
+    if not gpu:
         trainer = rbm.train_cpu
     else:
         trainer = rbm.train_gpu
@@ -240,5 +244,7 @@ if __name__=='__main__':
         t2 = time.clock()
         util.stdout("%4d th-epoch mse= %9e (%f sec)\n" % (i, e, t2-t1))
         sys.stdout.flush()
-
-    dataio.saveRBM(outf, rbm.f, rbm.w.T, rbm.vbias, rbm.hbias)
+    
+    if gpu:
+        rbm.to_cpu()
+    dataio.saveRBM(outf, af, rbm.W.T.copy(), rbm.hbias, rbm.vbias)

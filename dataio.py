@@ -5,7 +5,7 @@ import sys
 import numpy as np
 
 from chainer import FunctionSet
-import chainer.funcions as F
+import chainer.functions as F
 
 
 import util
@@ -20,14 +20,14 @@ def __parse_flags__(fmt):
     elif e == "ne": r = "="
     else:
         raise NameError("The encoding %s is unknown." % fmt)
-   return r + fmt[0:2]
+    return r + fmt[0:2]
 
- def _str2actf(s):
+def str2actf(s):
     sl = str(s).lower()
     if   sl == "sigmoid" or sl == "sigmoidlayer": return F.sigmoid
     elif sl == "softmax" or sl == "softmaxlayer": return F.softmax
-    elif sl == "relu":   or sl == "relulayer":  return F.relu
-    elif sl == "tanh":   or sl == "tanhlayer": return F.tanh
+    elif sl == "relu"    or sl == "relulayer":  return F.relu
+    elif sl == "tanh"    or sl == "tanhlayer": return F.tanh
     else:
         util.panic("Unknown activate function name %s \n" % s)
 
@@ -100,9 +100,10 @@ def loadnn(f):
     i = 0
     while 'type_'+str(i) in d.keys():
         s = str(i)
-        params['l_'+s] = F.linear(w.shape[0], w.shape[1], 
-                            initalW=d['w_'+s], initial_bias=d['hbias_'+s])
-        actfs.append(_str2actf(d['type_'+s]) )
+        w = d['w_'+s]
+        params['l_'+s] = F.Linear(w.shape[1], w.shape[0], 
+                            initialW=w, initial_bias=d['hbias_'+s])
+        actfs.append(str2actf(d['type_'+s]) )
         i+=1
     model = FunctionSet(**params)
     return model, actfs

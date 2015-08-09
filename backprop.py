@@ -2,8 +2,8 @@
 
 """Training RBM.
 Usage: 
-  trainrbm.py [options] <file> <tar>
-  trainrbm.py -h | --help
+  backprop.py [options] <file> <tar>
+  backprop.py -h | --help
 options:
    -h, --help    Show this help.
    --cpu         Process on the CPU.
@@ -17,7 +17,7 @@ options:
    --lr <val>    learning rate [default: 0] 
    --mm <val>    momentum [default: 0] 
    --re <val>    regulalizer. [default: 0]
-   ---dr <val>   The probability of dropout. If 0, do not applying dropout. [default: 0]
+   --dr <val>   The probability of dropout. If 0, do not applying dropout. [default: 0]
    --seed <NUM>  The seed of random value. [default: 1234]
 """ 
 
@@ -30,49 +30,25 @@ import chainer.functions as F
 
 import util,dataio
 
-def _str2actf(s):
-    sl = str(s).lower()
-    if   sl == "sigmoid" or sl == "sigmoidlayer": return F.sigmoid
-    elif sl == "softmax" or sl == "softmaxlayer": return F.softmax
-    elif sl == "relu":   or sl == "relulayer":  return F.relu
-    elif sl == "tanh":   or sl == "tanhlayer": return F.tanh
-    else:
-        util.panic("Unknown activate function name %s \n" % s)
-
-def _load_nn(fileobj):
-    d = np.load(fileobj)
-    i = 0
-    actfs = []
-    params = {}
-    while 'w_'+str(i) in d.keys():
-        s = str(i)
-        w = d['w_'+s].T.copy()
-        params['l'+s] = F.Linear(w.shape[1], w.shape[0], initialW=w, initial_bias=d['hbias_'+s])
-        actf = _str2actf(d['type_'+s])
-        actfs.append(actf)
-        i+=1
-    model = FunctionSet(**params)
-    return model, actfs
-
 def forward_mse(x_data, y_data, model, actf, dr=False):
     x = Variable(x_data)
     y = Variable(y_data)
-    h = actf[0](model.l0(x))
+    h = actf[0](model.l_0(x))
     use_dr = False
     if dr and dr != 0.0:
         use_dr = True
 
     for i in range(1, len(actf)):
-        m = getattr(model, 'l'+str(i))
+        m = getattr(model, 'l_'+str(i))
         h = F.dropout(actf[i](m(h)), ratio=dr, train=use_dr)
     e = mean_squared_error(h, y)
     return e,e
 
 
-def forward_cross_entoropy(x_data, y_data, model, actf. dr=False):
+def forward_cross_entoropy(x_data, y_data, model, actf, dr=False):
     x = Variable(x_data)
     y = Variable(y_data)
-    h = actf[0](model.l0(x))
+    h = actf[0](model.l_0(x))
     
     use_dr=False
     if dr and dr != 0.0:
@@ -80,7 +56,7 @@ def forward_cross_entoropy(x_data, y_data, model, actf. dr=False):
 
     l = len(actf)
     for i in range(1, l):
-        m = getattr(model, 'l'+str(i))
+        m = getattr(model, 'l_'+str(i))
         if i < l-1:
             h = F.dropout(actf[i](m(h)), ratio=dr, train=use_dr)
         else:
@@ -105,7 +81,7 @@ if __name__=='__main__':
     tarf    = args['<tar>']
     trainf  = args['<file>']
 
-    model, actfs = _load_nn(nn)
+    model, actfs = dataio.loadnn(nn)
     if gpu:
         cuda.init()
         model.to_gpu()
@@ -114,8 +90,8 @@ if __name__=='__main__':
     optimizer.setup(model.collect_parameters())
     
     nlayer = len(actfs)
-    idim = model.l0.W.shape[1]
-    odim = getattr(model, 'l'+str(nlayer-1)).W.shape[0]
+    idim = model.l_0.W.shape[1]
+    odim = getattr(model, 'l_'+str(nlayer-1)).W.shape[0]
 
 
     data = dataio.dataio(trainf, dataform, idim).astype(np.float32)
@@ -149,7 +125,7 @@ if __name__=='__main__':
             mse += loss.data
             mean_acc += acc.data
         mse = cuda.to_cpu(mse)
-        mean_acc /= cuda.to_cpu(mse)
+        mean_acc = cuda.to_cpu(mean_acc)
         mse /= nmb
         mean_acc /= nmb
         print ep, mse, mean_acc
