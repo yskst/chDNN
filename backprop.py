@@ -131,4 +131,5 @@ if __name__=='__main__':
         print ep, mse, mean_acc
         #util.stdout('%4d th, mse= %.8e mean_of_acc= %.8e\n'% (i, mse, mean_acc))
         sys.stdout.flush()
+    util.savenn(outf,model, actfs)
 
