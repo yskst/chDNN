@@ -41,7 +41,7 @@ def forward_mse(x_data, y_data, model, actf, dr=False):
     for i in range(1, len(actf)):
         m = getattr(model, 'l_'+str(i))
         h = F.dropout(actf[i](m(h)), ratio=dr, train=use_dr)
-    e = mean_squared_error(h, y)
+    e = F.mean_squared_error(h, y)
     return e,e
 
 
@@ -101,7 +101,7 @@ if __name__=='__main__':
         tar = dataio.dataio(tarf, tarform).astype(np.int32)
     elif ttype == 'f':
         forward = forward_mse
-        tar = data.dataio(tarf, tarform, 0).astype(np.float32)
+        tar = dataio.dataio(tarf, tarform, odim).astype(np.float32)
 
     ndata = data.shape[0]
     nmb = ndata / mbsize
@@ -110,6 +110,7 @@ if __name__=='__main__':
         mse = 0.0
         mean_acc = 0.0
         mb = np.random.permutation(ndata)
+        t1 = time.clock()
         for i in range(0, ndata, mbsize):
             x_batch = data[mb[i:i+mbsize]]
             y_batch = tar[mb[i:i+mbsize]]
@@ -129,8 +130,10 @@ if __name__=='__main__':
         mean_acc = cuda.to_cpu(mean_acc)
         mse /= nmb
         mean_acc /= nmb
-        print ep, mse, mean_acc
-        #util.stdout('%4d th, mse= %.8e mean_of_acc= %.8e\n'% (i, mse, mean_acc))
+        t2 = time.clock()
+        util.stdout("%4d %s %s ( %f sec)\n" %(ep, str(mse), str(mean_acc), t2-t1))
         sys.stdout.flush()
-    util.savenn(outf,model, actfs)
+    if gpu:
+        model.to_cpu()
+    dataio.savenn(outf,model, actfs)
 

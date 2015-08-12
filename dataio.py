@@ -88,7 +88,7 @@ def savenn(f, model, actf):
         s = str(i)
         l = getattr(model, 'l_'+s)
         d['w_'+s] = l.W
-        d['hbias_'+s] = l.bias
+        d['hbias_'+s] = l.b
         d['type_'+s] = actf[i].__name__
     np.savez(f, **d)
 

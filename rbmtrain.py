@@ -2,15 +2,15 @@
 
 """Training RBM.
 Usage: 
-  trainrbm.py [options] <visnum> <hidnum> <file>
-  trainrbm.py -h | --help
+  rbmtrain.py [options] <visnum> <hidnum> <file>
+  rbmtrain.py -h | --help
 options:
    -h, --help    Show this help.
    --cpu         Run on CPU
    --of=<file>   output file name.(npz file)
    --df=<str>    sample data format flags.The flag's detail is follow.
    --mb=<num>    mini-batch size.
-   -e <num> --epoch=<num>   the number of ephoch.
+   -e <num>, --epoch=<num>   the number of ephoch.
    --lr <val>    learning rate [default: 0] 
    --mm <val>    momentum [default: 0] 
    --re <val>    regulalizer. [default: 0]

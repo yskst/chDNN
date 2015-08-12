@@ -11,3 +11,7 @@ def stderr(s):
 def panic(s):
     sys.stderr.write(s)
     sys.exit(1)
+
+def linear(x):
+    """ The dummy function """
+    return x

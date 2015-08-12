@@ -30,7 +30,7 @@ if __name__=='__main__':
     if re.match(r"^\d$", pick):
         p = [ int(pick) ]
     elif re.match(r"^\d:\d$", pick):
-        r = s.rstrip().split(':')
+        r = pick.rstrip().split(':')
         assert len(r) == 2
         r = map(int, r)
         p = range(r[0], r[1])
@@ -46,4 +46,4 @@ if __name__=='__main__':
         d['hbias_' + s] = l.b
         d['type_' + s]  = actfs[i].__name__
         j += 1
-    np.save(of, **d)
+    np.savez(of, **d)

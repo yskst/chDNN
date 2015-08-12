@@ -55,6 +55,7 @@ if __name__=='__main__':
         return h
     
     ndata = data.shape[0]
+    print ndata
     f = open(of, 'wb')
     for i in range(0, ndata, mbsize):
         x_batch = data[i:i+mbsize]
@@ -65,7 +66,7 @@ if __name__=='__main__':
             y = cuda.to_cpu(y)
         y.byteswap(be)
         y.tofile(f)
-    
+    """
     nbatch = ndata/mbsize
     x_batch = data[nbatch*mbsize:]
     if gpu:
@@ -75,6 +76,6 @@ if __name__=='__main__':
         y = cuda.to_cpu(y)
     y.byteswap(be)
     y.tofile(f)
-
+"""
     f.close()
 
