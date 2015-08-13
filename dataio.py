@@ -28,6 +28,7 @@ def str2actf(s):
     elif sl == "softmax" or sl == "softmaxlayer": return F.softmax
     elif sl == "relu"    or sl == "relulayer":  return F.relu
     elif sl == "tanh"    or sl == "tanhlayer": return F.tanh
+    elif sl == "linear"  or sl == "linearlayer": return util.linear
     else:
         util.panic("Unknown activate function name %s \n" % s)
 

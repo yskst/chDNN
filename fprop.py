@@ -55,7 +55,6 @@ if __name__=='__main__':
         return h
     
     ndata = data.shape[0]
-    print ndata
     f = open(of, 'wb')
     for i in range(0, ndata, mbsize):
         x_batch = data[i:i+mbsize]
