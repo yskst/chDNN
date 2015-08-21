@@ -9,7 +9,7 @@ options:
    --cpu         Run on CPU.
    --nn=<file>   Parameter file of Neural Network or RBM
    --of=<file>   Output file name.
-   --ot=<f4le|f4be|f4ne>    output type is little/big/native endian 4-byte float.
+   --ot=<f4le|f4be|f4ne|text>    output type is little/big/native endian 4-byte float or text format.
    --df=<str>    Sample data format flags.The flag's detail is follow.
    --mbsize=<num>  Size of mini-batch [default: 256].
 """ 
@@ -23,26 +23,37 @@ import chainer.functions as F
 
 import util,dataio
 
+def savebin(array, of):
+    array.tofile(of)
+def savetxt(array, of):
+    np.savetxt(of, array, fmt="%+.9e")
 
 if __name__=='__main__':
     args = docopt(__doc__, argv=sys.argv[1:])
     gpu = not bool(args['--cpu']) 
     nnf = args['--nn']
-    endian = args['--ot']
+    otype = args['--ot']
     of  = args['--of']
     df  = args['--df']
     mbsize = int(args['--mbsize'])
     
     model, actfs = dataio.loadnn(nnf)
     nlayer = len(actfs)
-    data = dataio.dataio(args['<file>'], df, model.l_0.W.shape[1])
+    data = dataio.dataio(args['<file>'], df, model.l_0.W.shape[1]).astype(np.float32)
     
     if gpu:
         cuda.init()
         model.to_gpu()
         
-    if endian == 'f4be': be = True
-    elif endian == 'f4ne' or endian == 'f4le': be = False
+    if otype == 'f4be': 
+        be = True
+        save = savebin
+    elif otype == 'f4ne' or otype == 'f4le': 
+        be = False
+        save = savebin
+    elif otype == 'text':
+        be = False
+        save = savetxt
     else:
         util.panic("Unknown endian type: " + endian)
     
@@ -64,17 +75,6 @@ if __name__=='__main__':
         if gpu:
             y = cuda.to_cpu(y)
         y.byteswap(be)
-        y.tofile(f)
-    """
-    nbatch = ndata/mbsize
-    x_batch = data[nbatch*mbsize:]
-    if gpu:
-        x_batch = cuda.to_gpu(x_batch)
-    y = forward(x_batch).data
-    if gpu:
-        y = cuda.to_cpu(y)
-    y.byteswap(be)
-    y.tofile(f)
-"""
+        save(y, f)
     f.close()
 

@@ -44,7 +44,7 @@ class bbRBM(function.Function):
     """ The Gaussian-Bernoulli Restricted Boltzman Machine(GBRBM) """
     def __init__(self, vis_size, hid_size, act_func=F.sigmoid,
                        init_w=None, init_hbias=None, init_vbias=None, 
-                       seed=1234, wscale=1e-2):
+                       seed=1234, wscale=1e-1):
         self.W      = None
         self.gW    = None
         self.hbias  = None
