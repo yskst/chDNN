@@ -53,7 +53,7 @@ for i in `seq 0 $e`;do
   j=`expr $i + 1`
   if [ $i -eq $e ]; then
     rbm_epoch=0
-    if [ dnntype = "c" ];then
+    if [ $dnntype = "c" ];then
       $actfunc=softmax
     fi
   fi
@@ -68,14 +68,14 @@ for i in `seq 0 $e`;do
 
   echo "Forward propagation to train next layer's RBM..."
   $scpdir/fprop.py --nn $outdir/rbm/L$i.npz --of $outdir/rbm/L$i.dat \
-                   --ot f4ne --df $format 
+                   --ot f4ne --df $format  $data
   rbmtype=bb
   data=$outdir/rbm/L$i.dat
   format=f4ne
   rbms+=("$outdir/rbm/L$i.npz")
 done
 
-echo "Concatenate RBMs...
+echo "Concatenate RBMs..."
 $scpdir/rbms2mlp.py --of $oudir/mlp/nn_init.npz ${rbms[@]}
 
 echo "Back propagation..."
