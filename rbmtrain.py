@@ -24,6 +24,7 @@ from docopt import docopt
 
 import numpy as np
 from chainer import cuda, function, Variable
+import chainer.cuda.cupy as cupy
 import chainer.functions as F
 
 import util,dataio
@@ -36,8 +37,8 @@ def _empty_like(src):
     else:
         return np.empty_like(src)
 
-_cudot = cuda.culinalg.dot
-_cusum = cuda.cumisc.sum
+_cudot = cupy.dot
+_cusum = cupy.sum
 
 
 class bbRBM(function.Function):
@@ -104,8 +105,7 @@ class bbRBM(function.Function):
         else:
             return x.dot(w.T) + bias
     def _linear_gpu(self, x, w, bias, transw='N'):
-        with cuda.using_cumisc():
-            y = cuda.culinalg.dot(x, w, transb=transw)
+        y = _cudot(x, w.transpose())
         self._linear_bias_gpu(y, bias, bias.size)
         return y
 
@@ -129,12 +129,12 @@ class bbRBM(function.Function):
     def forward_gpu(self, x):
         h0act = self.f(Variable( self._linear_gpu(x, self.W, self.hbias)))
         h0act = h0act.data
-        h0smp = h0act > self.randgen.gen_uniform(h0act.shape, np.float32)
+        h0smp = h0act > cupy.random.rand(h0act.shape, np.float32)
         v1act = self._reconst_gpu(h0smp)
         h1act = self.f(Variable(self._linear_gpu(v1act, self.W, self.hbias)))
         h1act = h1act.data
         
-        self.mse = cuda.cumisc.mean((x-v1act)**2)
+        self.mse = cupy.mean((x-v1act)**2)
         return h0act, v1act, h1act
 
     def backward_cpu(self, x):
@@ -184,7 +184,7 @@ class bbRBM(function.Function):
 
     def to_gpu(self, device=None):
         self.randgen = cuda.get_generator(device)
-        cuda.seed(self.seed)
+        cupy.random.seed(self.seed)
         super(bbRBM, self).to_gpu(device)
 
 class gbRBM(bbRBM):
@@ -226,9 +226,12 @@ if __name__=='__main__':
     
     if not gpu:
         trainer = rbm.train_cpu
+        xp = np
     else:
         trainer = rbm.train_gpu
-        cuda.init()
+        xp = cupy
+        cuda.check_cuda_available()
+        cuda.get_device(0).use()
         rbm.to_gpu()
 
     rbm.init_grads()
