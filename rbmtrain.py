@@ -24,15 +24,14 @@ from docopt import docopt
 
 import numpy as np
 from chainer import cuda, function, Variable
-import chainer.cuda.cupy as cupy
 import chainer.functions as F
 
 import util,dataio
 
-
+cupy = cuda.cupy
 
 def _empty_like(src):
-    if isinstance(src, cuda.GPUArray):
+    if isinstance(src, cupy.ndarray):
         return cuda.empty_like(src)
     else:
         return np.empty_like(src)
@@ -87,12 +86,6 @@ class bbRBM(function.Function):
         self.gW.fill(0)
         self.ghbias.fill(0)
         self.gvbias.fill(0)
-    
-
-    _linear_bias_gpu = cuda.elementwise(
-            'float *x, float *b, int ndim',
-            'x[i] += b[i % ndim]',
-            'linear_bias')
 
     def parameter_names(self):
         return 'W', 'vbias', 'hbias'
@@ -110,28 +103,26 @@ class bbRBM(function.Function):
         return y
 
     
-    def _reconst_cpu(self, h):
-        return self.f(Variable(self._linear_cpu(h, self.W, self.vbias, 'T'))).data
-    def _reconst_gpu(self, h):
-        return self.f(Variable(self._linear_gpu(h, self.W, self.vbias, 'T'))).data
+    def _reconst(self, h):
+        return self.f(Variable(h.dot(W.T) + self.vbias)).data
 
     def forward_cpu(self, x):
-        h0act = self.f(Variable(self._linear_cpu(x, self.W, self.hbias)))
+        h0act = self.f(Variable(x.dot(self.W) + self.hbias))
         h0act = h0act.data
         h0smp = np.random.binomial(1, h0act, h0act.shape).astype(np.float32)
-        v1act = self._reconst_cpu(h0smp)
-        h1act = self.f(Variable(self._linear_cpu(v1act, self.W, self.hbias)))
+        v1act = self._reconst(h0smp)
+        h1act = self.f(Variable(v1act.dot(self.W) + self.hbias))
         h1act = h1act.data
 
         self.mse = np.mean((x-v1act)**2)
         return h0act, v1act, h1act
 
     def forward_gpu(self, x):
-        h0act = self.f(Variable( self._linear_gpu(x, self.W, self.hbias)))
+        h0act = self.f(Variable( x.dot(self.W) + self.hbias))
         h0act = h0act.data
         h0smp = h0act > cupy.random.rand(h0act.shape, np.float32)
-        v1act = self._reconst_gpu(h0smp)
-        h1act = self.f(Variable(self._linear_gpu(v1act, self.W, self.hbias)))
+        v1act = self._reconst(h0smp)
+        h1act = self.f(Variable(v1act.dot(self.W) + self.hbias))
         h1act = h1act.data
         
         self.mse = cupy.mean((x-v1act)**2)
@@ -183,7 +174,6 @@ class bbRBM(function.Function):
         return cuda.to_cpu (self.mse) 
 
     def to_gpu(self, device=None):
-        self.randgen = cuda.get_generator(device)
         cupy.random.seed(self.seed)
         super(bbRBM, self).to_gpu(device)
 
