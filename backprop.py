@@ -102,7 +102,8 @@ if __name__=='__main__':
     elif ttype == 'f':
         forward = forward_mse
         tar = dataio.dataio(tarf, tarform, odim).astype(np.float32)
-
+    
+    assert data.shape[0] == tar.shape[0]
     ndata = data.shape[0]
     nmb = ndata / mbsize
     np.random.seed(seed)
@@ -124,10 +125,8 @@ if __name__=='__main__':
             loss.backward()
             optimizer.update()
             optimizer.weight_decay(re) # L2 reguralization.
-            mse += loss.data
-            mean_acc += acc.data
-        mse = cuda.to_cpu(mse)
-        mean_acc = cuda.to_cpu(mean_acc)
+            mse      += float(cuda.to_cpu(loss.data))
+            mean_acc += float(cuda.to_cpu(acc.data))
         mse /= nmb
         mean_acc /= nmb
         t2 = time.clock()
