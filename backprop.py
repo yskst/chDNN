@@ -105,7 +105,7 @@ if __name__=='__main__':
     
     assert data.shape[0] == tar.shape[0]
     ndata = data.shape[0]
-    nmb = ndata / mbsize
+    nmb = math.ceil(float(ndata) / mbsize)
     np.random.seed(seed)
     for ep in range(epoch):
         mse = 0.0
