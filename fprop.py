@@ -11,7 +11,7 @@ options:
    --of=<file>   Output file name.
    --ot=<f4le|f4be|f4ne|text>    output type is little/big/native endian 4-byte float or text format.
    --df=<str>    Sample data format flags.The flag's detail is follow.
-   --mbsize=<num>  Size of mini-batch [default: 256].
+   --mbsize=<num>  Size of mini-batch [default: 512].
 """ 
 
 import sys, time

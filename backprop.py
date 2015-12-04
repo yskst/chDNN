@@ -21,7 +21,7 @@ options:
    --seed <NUM>  The seed of random value. [default: 1234]
 """ 
 
-import sys, time
+import sys, time,math
 from docopt import docopt
 
 import numpy as np

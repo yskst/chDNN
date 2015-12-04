@@ -54,6 +54,7 @@ class bbRBM(function.Function):
         
         self.seed = seed
         self.f = act_func
+        np.random.seed(seed)
         
         if init_w is not None:
             assert init_w.shape == (vis_size, hid_size)
@@ -217,7 +218,7 @@ if __name__=='__main__':
     elif rbmtype == "gb":
         rbm = gbRBM(visnum, hidnum, seed=seed)
     else:
-        rbm = bbRBM(visnum, hidnum)
+        rbm = bbRBM(visnum, hidnum, seed=seed)
     
     af = dataio.str2actf(actf)
 
