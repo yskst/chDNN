@@ -92,6 +92,11 @@ class bbRBM(function.Function):
     def gradient_names(self):
         return 'gW', 'gvbias', 'ghbias'
 
+    def params(self):
+        d = self.__dict__
+        for param in self.parameter_names()+self.gradient_names():
+          yield param
+
     def _linear_cpu(self, x, w, bias, transw='N'):
         if transw=='N':
             return x.dot(w) + bias
@@ -104,7 +109,7 @@ class bbRBM(function.Function):
 
     
     def _reconst(self, h):
-        return self.f(Variable(h.dot(W.T) + self.vbias)).data
+        return self.f(Variable(h.dot(self.W.T) + self.vbias)).data
 
     def forward_cpu(self, x):
         h0act = self.f(Variable(x.dot(self.W) + self.hbias))
@@ -120,7 +125,8 @@ class bbRBM(function.Function):
     def forward_gpu(self, x):
         h0act = self.f(Variable( x.dot(self.W) + self.hbias))
         h0act = h0act.data
-        h0smp = h0act > cupy.random.rand(h0act.shape, np.float32)
+        s = h0act.shape
+        h0smp = h0act > cupy.random.rand(s[0],s[1], dtype=np.float32)
         v1act = self._reconst(h0smp)
         h1act = self.f(Variable(v1act.dot(self.W) + self.hbias))
         h1act = h1act.data
@@ -139,7 +145,7 @@ class bbRBM(function.Function):
     def backward_gpu(self, x):
         ndata = x.shape[0]
         h0act, v1act, h1act = self.forward_gpu(x)
-        gW = (_cudot(v1act,h1act, transa='T') - _cudot(x, h0act, transa='T')) / ndata
+        gW = (_cudot(v1act.T,h1act) - _cudot(x.T, h0act)) / ndata
         ghbias = (_cusum(h1act, axis=0) - _cusum(h0act,axis=0)) / ndata
         gvbias = (_cusum(v1act, axis=0) - _cusum(x, axis=0))    / ndata
 
@@ -175,7 +181,14 @@ class bbRBM(function.Function):
 
     def to_gpu(self, device=None):
         cupy.random.seed(self.seed)
-        super(bbRBM, self).to_gpu(device)
+        d = self.__dict__
+        for param in self.params():
+            d[param] = cuda.to_gpu(d[param])
+    
+    def to_cpu(self, device=None):
+        d = self.__dict__
+        for param in self.params():
+            d[param] = cuda.to_cpu(d[param])
 
 class gbRBM(bbRBM):
     def _reconst_cpu(self, h):

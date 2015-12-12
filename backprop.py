@@ -83,7 +83,6 @@ if __name__=='__main__':
 
     model, actfs = dataio.loadnn(nn)
     if gpu:
-        cuda.check_cuda_available()
         cuda.get_device(0).use()
         model.to_gpu()
     
