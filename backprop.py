@@ -90,8 +90,8 @@ if __name__=='__main__':
     optimizer.setup(model.collect_parameters())
     
     nlayer = len(actfs)
-    idim = model.l_0.W.shape[1]
-    odim = getattr(model, 'l_'+str(nlayer-1)).W.shape[0]
+    idim = model.l_0.W.data.shape[1]
+    odim = getattr(model, 'l_'+str(nlayer-1)).W.data.shape[0]
 
 
     data = dataio.dataio(trainf, dataform, idim).astype(np.float32)

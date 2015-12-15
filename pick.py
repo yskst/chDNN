@@ -42,8 +42,8 @@ if __name__=='__main__':
     for i in p:
         l = getattr(nn, 'l_' + str(i))
         s = str(j)
-        d['w_' + s] = l.W
-        d['hbias_' + s] = l.b
+        d['w_' + s] = l.W.data
+        d['hbias_' + s] = l.b.data
         d['type_' + s]  = actfs[i].__name__
         j += 1
     np.savez(of, **d)

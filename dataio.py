@@ -88,8 +88,8 @@ def savenn(f, model, actf):
     for i in range(nlayer):
         s = str(i)
         l = getattr(model, 'l_'+s)
-        d['w_'+s] = l.W
-        d['hbias_'+s] = l.b
+        d['w_'+s] = l.W.data
+        d['hbias_'+s] = l.b.data
         d['type_'+s] = actf[i].__name__
     np.savez(f, **d)
 

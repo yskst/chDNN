@@ -39,7 +39,7 @@ if __name__=='__main__':
     
     model, actfs = dataio.loadnn(nnf)
     nlayer = len(actfs)
-    data = dataio.dataio(args['<file>'], df, model.l_0.W.shape[1]).astype(np.float32)
+    data = dataio.dataio(args['<file>'], df, model.l_0.W.data.shape[1]).astype(np.float32)
     
     if gpu:
         cuda.init()
